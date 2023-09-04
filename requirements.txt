@@ -1,3 +1,4 @@
+pip == 23.2.1
 absl-py==1.4.0
 asttokens==2.3.0
 astunparse==1.6.3
