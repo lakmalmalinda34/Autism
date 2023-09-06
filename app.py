@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify
 import speech_recognition as sr
 from pydub import AudioSegment
 import os
+import numpy as np
+import tensorflow as tf
+import joblib
 
 app = Flask(__name__)
 
@@ -10,6 +13,7 @@ def process_audio():
     try:
         # Receive the audio file from the POST request
         audio_file = request.files['audio']
+        age = request.form.get('age')
 
         if audio_file:
             # Save the audio file to a temporary location
@@ -25,6 +29,7 @@ def process_audio():
 
             # Initialize the speech recognizer
             r = sr.Recognizer()
+            r.energy_threshold =1
 
             # Listen to the audio
             with sr.AudioFile(wav_temp_path) as source:
@@ -32,27 +37,44 @@ def process_audio():
 
             # Perform speech recognition
             try:
-                text = r.recognize_google(audio_data)
+                text = r.recognize_google(audio_data,language="si-LK")
             except sr.UnknownValueError:
                 text = ""
-
-            # Check the length of the saved audio file using pydub
-            audio_duration_seconds = len(audio) / 1000  # Convert from milliseconds to seconds
 
             if not text:
                 result = "Empty audio file"
             else:
                 words = text.split()
                 num_words = len(words)
-                word_count = (40 / 120) * audio_duration_seconds
+                
 
-                if num_words > word_count:
-                    result = "Autism Negative"
-                else:
-                    result = "Autism Positive"
+            model = tf.keras.models.load_model("Autism_Trained_model.h5")
+            scaler = joblib.load('standard_scaler.pkl')
 
+            #model.summary()
+
+            input_data =(int(age),num_words)
+
+            np_array = np.asarray(input_data)
+
+            data_reshaped = np_array.reshape(1,-1)
+
+            std_data = scaler.transform(data_reshaped)
+
+            threshold = 0.5
+            prediction = model.predict(std_data)
+            print(prediction)
+
+            if prediction < threshold:
+                result= "Autism Negetive"
+            else:
+                result= "Autism positve"
+
+            
+            print(num_words)
+            print(text)
             # Return the result as JSON
-            response_data = {'result': result}
+            response_data = {'result': result , 'Word count': num_words}
             os.remove(wav_temp_path)
             os.remove(temp_audio_path)  # Remove the temporary files
             return jsonify(response_data)
